@@ -324,6 +324,59 @@
       font-size: .75rem; color: var(--dim);
     }
 
+    
+    /* ===== ADVICE SECTION ===== */
+    .advice-section {
+      padding: 20px 28px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(6,182,212,.03);
+    }
+    .advice-title {
+      font-size: .72rem;
+      font-weight: 700;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: 14px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .advice-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .advice-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 11px 13px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: .8rem;
+      line-height: 1.5;
+    }
+    .advice-item.warning {
+      border-color: rgba(239,68,68,.35);
+      background: rgba(239,68,68,.08);
+    }
+    .advice-item.caution {
+      border-color: rgba(245,158,11,.35);
+      background: rgba(245,158,11,.08);
+    }
+    .advice-item.good {
+      border-color: rgba(16,185,129,.35);
+      background: rgba(16,185,129,.08);
+    }
+    .advice-icon {
+      flex-shrink: 0;
+      font-size: 1.1rem;
+      margin-top: 1px;
+    }
+    .advice-content { flex: 1; }
+    .advice-content strong { display: block; font-weight: 700; color: #fff; margin-bottom: 2px; font-size: .82rem; }
+    .advice-content p { color: var(--muted); font-size: .78rem; margin: 0; }
+
     /* ===== MODEL INFO CARD ===== */
     .model-info-card {
       margin-top: 24px;
@@ -624,6 +677,12 @@
             <span class="prob-pct" id="pctPos">–</span>
           </div>
         </div>
+        
+        <div class="advice-section" id="adviceSection">
+          <div class="advice-title">💡 Lời khuyên Y tế & Đề xuất Cá nhân hóa</div>
+          <div class="advice-list" id="adviceList"></div>
+        </div>
+
         <div class="risk-section">
           <div class="risk-title">Mức độ rủi ro</div>
           <div class="risk-meter">
@@ -819,6 +878,99 @@ function localFallback(f) {
   return Math.max(0.01, Math.min(0.99, s));
 }
 
+
+function generateHealthAdvice(features, isPositive, probs) {
+  const [preg, glucose, bp, skin, insulin, bmi, dpf, age] = features;
+  const adviceList = [];
+
+  // 1. Overall recommendation
+  if (isPositive) {
+    adviceList.push({
+      type: 'warning',
+      icon: '🚨',
+      title: 'ĐỀ XUẤT KHÁM CHUYÊN KHOA KHẢN CẤP',
+      desc: 'Mô hình AI dự đoán nguy cơ tiểu đường là ' + (probs[1]*100).toFixed(1) + '%. Vui lòng đến bệnh viện hoặc phòng khám chuyên khoa Nội tiết để kiểm tra nghiệm pháp xét nghiệm máu.'
+    });
+  }
+
+  // 2. Glucose assessment
+  if (glucose >= 140) {
+    adviceList.push({
+      type: 'warning',
+      icon: '🩺',
+      title: 'Chỉ số Glucose cao (' + glucose + ' mg/dL)',
+      desc: 'Nồng độ đường huyết ở mức cảnh báo (>140 mg/dL). Nên cắt giảm tinh bột nhanh, đồ uống có đường và kiểm tra chỉ số HbA1c.'
+    });
+  } else if (glucose >= 100) {
+    adviceList.push({
+      type: 'caution',
+      icon: '⚠️',
+      title: 'Glucose ngưỡng tiền tiểu đường (' + glucose + ' mg/dL)',
+      desc: 'Chỉ số Glucose ở mức chớm cao (100–139 mg/dL). Khuyên ưu tiên thực phẩm có chỉ số đường huyết thấp (Low GI) và tập thể dục 30 phút/ngày.'
+    });
+  } else {
+    adviceList.push({
+      type: 'good',
+      icon: '✅',
+      title: 'Glucose trong giới hạn bình thường (' + glucose + ' mg/dL)',
+      desc: 'Nồng độ đường huyết lý tưởng (<100 mg/dL). Tiếp tục duy trì chế độ dinh dưỡng hiện tại.'
+    });
+  }
+
+  // 3. BMI assessment
+  if (bmi >= 30) {
+    adviceList.push({
+      type: 'warning',
+      icon: '⚖️',
+      title: 'Chỉ số BMI mức béo phì (' + bmi.toFixed(1) + ' kg/m²)',
+      desc: 'BMI ≥ 30 làm tăng nguy cơ kháng Insulin. Việc giảm 5–10% trọng lượng cơ thể giúp tăng độ nhạy Insulin từ 30% đến 50%.'
+    });
+  } else if (bmi >= 25) {
+    adviceList.push({
+      type: 'caution',
+      icon: '🏋️',
+      title: 'Chỉ số BMI thừa cân (' + bmi.toFixed(1) + ' kg/m²)',
+      desc: 'BMI ở ngưỡng thừa cân (25–29.9 kg/m²). Bạn nên tăng cường vận động thể lực ít nhất 150 phút/tuần.'
+    });
+  } else {
+    adviceList.push({
+      type: 'good',
+      icon: '💪',
+      title: 'BMI ở mức cân đối (' + bmi.toFixed(1) + ' kg/m²)',
+      desc: 'Cân nặng chuẩn so với chiều cao (18.5–24.9 kg/m²).'
+    });
+  }
+
+  // 4. Age & Family history (DPF)
+  if (dpf >= 0.5) {
+    adviceList.push({
+      type: 'caution',
+      icon: '🧬',
+      title: 'Tiền sử gia đình có yếu tố nguy cơ (DPF = ' + dpf.toFixed(3) + ')',
+      desc: 'Chỉ số tiền sử di truyền cao hơn bình thường. Nên theo dõi định kỳ đường huyết 6 tháng/lần.'
+    });
+  }
+  if (age >= 45) {
+    adviceList.push({
+      type: 'caution',
+      icon: '📅',
+      title: 'Độ tuổi cần quan tâm (' + age + ' tuổi)',
+      desc: 'Người từ 45 tuổi trở lên thuộc nhóm nguy cơ tự nhiên của tiểu đường Type 2.'
+    });
+  }
+
+  if (!isPositive) {
+    adviceList.push({
+      type: 'good',
+      icon: '🎉',
+      title: 'Kết quả hiện tại an toàn',
+      desc: 'Tỷ lệ an toàn là ' + (probs[0]*100).toFixed(1) + '%. Tiếp tục duy trì lối sống lành mạnh.'
+    });
+  }
+
+  return adviceList;
+}
+
 function showResult(prediction, probs) {
   const placeholder = document.getElementById('resultPlaceholder');
   const actual      = document.getElementById('resultActual');
@@ -845,6 +997,22 @@ function showResult(prediction, probs) {
     document.getElementById('pctPos').textContent = posP.toFixed(1) + '%';
     document.getElementById('riskNeedle').style.left = posP.toFixed(1) + '%';
   }, 50);
+
+  // Render health advice cards dynamically
+  const features = getValues();
+  const adviceItems = generateHealthAdvice(features, isPos, probs);
+  const adviceListContainer = document.getElementById('adviceList');
+  if (adviceListContainer) {
+    adviceListContainer.innerHTML = adviceItems.map(item => `
+      <div class="advice-item ${item.type}">
+        <div class="advice-icon">${item.icon}</div>
+        <div class="advice-content">
+          <strong>${item.title}</strong>
+          <p>${item.desc}</p>
+        </div>
+      </div>
+    `).join('');
+  }
 }
 
 // Init
