@@ -1,6 +1,6 @@
 # Website Chẩn đoán Tiểu đường (Pima Diabetes AI)
 
-> **Môn học:** Intelligent System Development — TS. Đinh Quế Trần  
+> **Môn học:** Intelligent System Development — TS. Trần Đình Quế  
 > **Phần 1:** Binary Classification — Pima Indians Diabetes  
 
 ---
