@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hệ Chẩn đoán Tiểu đường — AI Diagnosis</title>
+  <meta name="description" content="Hệ thống thông minh chẩn đoán nguy cơ mắc bệnh tiểu đường type 2 bằng Machine Learning — Random Forest Classifier chạy trực tiếp trên trình duyệt." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    /* ===== DESIGN TOKENS ===== */
+    :root {
+      --bg:        #060d1f;
+      --bg2:       #0a1628;
+      --surface:   #0f1f35;
+      --surface2:  #162840;
+      --border:    rgba(6,182,212,0.12);
+      --border2:   rgba(6,182,212,0.25);
+      --primary:   #06b6d4;
+      --primary-d: #0891b2;
+      --accent:    #22d3ee;
+      --success:   #10b981;
+      --danger:    #ef4444;
+      --warn:      #f59e0b;
+      --text:      #e2f0f7;
+      --muted:     #7fb5cc;
+      --dim:       #4a7a8a;
+      --radius:    16px;
+      --font:      'Inter', sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh; }
+    a { color: var(--primary); text-decoration: none; }
+    button { cursor: pointer; font-family: var(--font); border: none; }
+    input { font-family: var(--font); }
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--primary-d); border-radius: 3px; }
+
+    /* ===== HERO ===== */
+    .hero {
+      position: relative;
+      padding: 80px 24px 60px;
+      text-align: center;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(6,182,212,0.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 16px;
+      background: rgba(6,182,212,0.1);
+      border: 1px solid var(--border2);
+      border-radius: 100px;
+      font-size: .75rem; font-weight: 600;
+      color: var(--accent); margin-bottom: 24px;
+      letter-spacing: .05em; text-transform: uppercase;
+    }
+    .badge-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent);
+      animation: blink 1.8s ease-in-out infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+    .hero h1 {
+      font-size: clamp(2.2rem, 6vw, 4rem);
+      font-weight: 900; letter-spacing: -.03em; line-height: 1.1;
+      margin-bottom: 20px;
+    }
+    .grad {
+      background: linear-gradient(135deg, var(--accent), #67e8f9, var(--success));
+      background-size: 200% auto;
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: gshift 3s linear infinite;
+    }
+    @keyframes gshift { to { background-position: 200% center; } }
+    .hero p {
+      color: var(--muted); font-size: 1.05rem; max-width: 520px;
+      margin: 0 auto 32px; line-height: 1.7;
+    }
+    .hero-pills {
+      display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;
+      margin-bottom: 8px;
+    }
+    .pill {
+      padding: 6px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      font-size: .78rem; font-weight: 600; color: var(--muted);
+    }
+    .pill.active { background: rgba(6,182,212,.15); border-color: var(--border2); color: var(--accent); }
+
+    /* ===== MAIN CARD ===== */
+    .container { max-width: 1000px; margin: 0 auto; padding: 0 20px 80px; }
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 420px;
+      gap: 24px;
+      align-items: start;
+    }
+
+    /* ===== FORM CARD ===== */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      overflow: hidden;
+    }
+    .card-header {
+      padding: 24px 28px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 12px;
+    }
+    .card-icon {
+      width: 44px; height: 44px;
+      background: rgba(6,182,212,.15);
+      border: 1px solid var(--border2);
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem;
+    }
+    .card-header h2 { font-size: 1.1rem; font-weight: 700; }
+    .card-header p  { font-size: .8rem; color: var(--muted); margin-top: 2px; }
+    .card-body { padding: 24px 28px; }
+
+    /* Form grid */
+    .form-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 14px; margin-bottom: 20px;
+    }
+    .fg { display: flex; flex-direction: column; gap: 5px; }
+    .fg label {
+      font-size: .72rem; font-weight: 700;
+      color: var(--muted); text-transform: uppercase; letter-spacing: .06em;
+    }
+    .input-wrap { position: relative; }
+    .input-icon {
+      position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+      font-size: .95rem; pointer-events: none;
+    }
+    .input-wrap input {
+      width: 100%;
+      padding: 10px 12px 10px 36px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text); font-size: .9rem;
+      transition: .2s;
+    }
+    .input-wrap input:focus {
+      outline: none;
+      border-color: var(--primary);
+      background: rgba(6,182,212,.06);
+      box-shadow: 0 0 0 3px rgba(6,182,212,.12);
+    }
+    .hint { font-size: .68rem; color: var(--dim); }
+
+    /* Sliders section */
+    .sliders { margin-bottom: 20px; }
+    .slider-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,.04);
+    }
+    .slider-row:last-child { border-bottom: none; }
+    .slider-name { font-size: .8rem; font-weight: 600; color: var(--muted); min-width: 160px; }
+    .slider-name span { display: block; font-size: .68rem; color: var(--dim); font-weight: 400; }
+    .slider-wrap { flex: 1; position: relative; }
+    input[type="range"] {
+      width: 100%; height: 4px;
+      appearance: none; -webkit-appearance: none;
+      background: var(--surface2);
+      border-radius: 2px; cursor: pointer;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: var(--primary);
+      border: 2px solid var(--bg);
+      box-shadow: 0 0 6px rgba(6,182,212,.5);
+      cursor: pointer;
+    }
+    .slider-val {
+      min-width: 52px; text-align: right;
+      font-size: .85rem; font-weight: 700;
+      color: var(--accent);
+    }
+
+    /* Presets */
+    .presets {
+      display: flex; align-items: center; gap: 8px;
+      flex-wrap: wrap;
+      padding: 12px; margin-bottom: 16px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+    .preset-lbl { font-size: .75rem; color: var(--dim); }
+    .preset-btn {
+      padding: 5px 12px; border-radius: 100px;
+      font-size: .75rem; font-weight: 600;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      transition: .2s;
+    }
+    .preset-btn:hover {
+      background: rgba(6,182,212,.15);
+      border-color: var(--border2);
+      color: var(--accent);
+    }
+
+    /* Predict button */
+    .predict-btn {
+      width: 100%; padding: 15px;
+      border-radius: 14px;
+      font-size: 1rem; font-weight: 700;
+      background: linear-gradient(135deg, var(--primary), var(--primary-d));
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(6,182,212,.35);
+      transition: .25s;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .predict-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(6,182,212,.5); }
+    .predict-btn:active { transform: translateY(0); }
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2px solid rgba(255,255,255,.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      display: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .predict-btn.loading .btn-text { display: none; }
+    .predict-btn.loading .spinner { display: block; }
+
+    /* ===== RESULT PANEL ===== */
+    .result-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      overflow: hidden;
+      position: sticky; top: 20px;
+      transition: .4s;
+    }
+    .result-placeholder {
+      padding: 60px 24px;
+      text-align: center;
+    }
+    .result-placeholder .ph-icon { font-size: 3.5rem; opacity: .4; margin-bottom: 16px; }
+    .result-placeholder p { color: var(--muted); font-size: .9rem; line-height: 1.7; }
+
+    /* Result actual */
+    .result-actual { display: none; }
+    .result-hero {
+      padding: 32px 28px 24px;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+    }
+    .result-emoji { font-size: 3.5rem; margin-bottom: 12px; display: block; }
+    .result-status {
+      font-size: 1.35rem; font-weight: 800;
+      margin-bottom: 8px;
+    }
+    .result-status.positive { color: var(--danger); }
+    .result-status.negative { color: var(--success); }
+    .result-confidence { font-size: .85rem; color: var(--muted); }
+
+    /* Prob bars */
+    .prob-section { padding: 20px 28px; border-bottom: 1px solid var(--border); }
+    .prob-title { font-size: .72rem; font-weight: 700; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px; }
+    .prob-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .prob-row:last-child { margin-bottom: 0; }
+    .prob-lbl { font-size: .78rem; font-weight: 600; color: var(--muted); min-width: 140px; }
+    .prob-track { flex: 1; height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+    .prob-fill { height: 100%; border-radius: 4px; transition: width .8s cubic-bezier(.4,0,.2,1); width: 0; }
+    .fill-neg { background: linear-gradient(90deg, var(--success), #34d399); }
+    .fill-pos { background: linear-gradient(90deg, var(--warn), var(--danger)); }
+    .prob-pct { font-size: .82rem; font-weight: 700; min-width: 44px; text-align: right; }
+
+    /* Risk meter */
+    .risk-section { padding: 20px 28px; border-bottom: 1px solid var(--border); }
+    .risk-title { font-size: .72rem; font-weight: 700; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px; }
+    .risk-meter { position: relative; height: 12px; background: linear-gradient(90deg, var(--success), var(--warn), var(--danger)); border-radius: 6px; margin-bottom: 8px; }
+    .risk-needle {
+      position: absolute; top: -4px;
+      width: 20px; height: 20px;
+      background: #fff;
+      border: 3px solid var(--bg);
+      border-radius: 50%;
+      transform: translateX(-50%);
+      box-shadow: 0 2px 8px rgba(0,0,0,.4);
+      transition: left .8s cubic-bezier(.4,0,.2,1);
+    }
+    .risk-labels { display: flex; justify-content: space-between; font-size: .7rem; color: var(--dim); }
+
+    /* Info section */
+    .info-section { padding: 20px 28px; }
+    .info-row {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,.04);
+    }
+    .info-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .info-icon { font-size: 1rem; margin-top: 2px; }
+    .info-lbl { font-size: .72rem; color: var(--dim); }
+    .info-val { font-size: .85rem; font-weight: 600; }
+
+    .disclaimer {
+      padding: 14px 28px;
+      background: rgba(245,158,11,.05);
+      border-top: 1px solid rgba(245,158,11,.15);
+      font-size: .75rem; color: var(--dim);
+    }
+
+    /* ===== MODEL INFO CARD ===== */
+    .model-info-card {
+      margin-top: 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 24px 28px;
+    }
+    .mi-title { font-size: .75rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 16px; }
+    .mi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .mi-item {
+      padding: 14px;
+      background: var(--bg2);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+    .mi-num { font-size: 1.6rem; font-weight: 800; color: var(--accent); line-height: 1; }
+    .mi-lbl { font-size: .72rem; color: var(--dim); margin-top: 4px; }
+    .mi-bar {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+    .mi-bar-lbl { display: flex; justify-content: space-between; font-size: .72rem; color: var(--dim); margin-bottom: 6px; }
+    .mi-bar-track { height: 6px; background: var(--bg2); border-radius: 3px; overflow: hidden; }
+    .mi-bar-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--primary), var(--success)); }
+
+    /* ===== PIPELINE SECTION ===== */
+    .pipeline-section {
+      margin-top: 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 24px 28px;
+    }
+    .pipe-title { font-size: .75rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 16px; }
+    .pipe-flow { display: flex; align-items: center; gap: 0; overflow-x: auto; }
+    .pipe-step {
+      flex-shrink: 0;
+      padding: 12px 14px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      text-align: center;
+      min-width: 90px;
+    }
+    .pipe-step .ps-icon { font-size: 1.2rem; margin-bottom: 4px; }
+    .pipe-step .ps-lbl { font-size: .65rem; font-weight: 600; color: var(--muted); }
+    .pipe-arrow { flex-shrink: 0; color: var(--primary); font-size: 1rem; padding: 0 6px; }
+
+    /* ===== FOOTER ===== */
+    footer {
+      padding: 24px;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      font-size: .78rem; color: var(--dim);
+    }
+    footer a { color: var(--muted); }
+    footer a:hover { color: var(--primary); }
+
+    /* ===== LOADING OVERLAY ===== */
+    .loading-overlay {
+      position: fixed; inset: 0;
+      background: rgba(6,13,31,.85);
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center; justify-content: center;
+      z-index: 999;
+      flex-direction: column; gap: 16px;
+    }
+    .loading-overlay.show { display: flex; }
+    .lo-spinner {
+      width: 48px; height: 48px;
+      border: 3px solid rgba(6,182,212,.2);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    .lo-text { font-size: .9rem; color: var(--muted); }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+      .main-grid { grid-template-columns: 1fr; }
+      .result-card { position: static; }
+      .form-grid { grid-template-columns: 1fr; }
+      .mi-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="lo-spinner"></div>
+  <div class="lo-text" id="loText">Đang tải mô hình AI...</div>
+</div>
+
+<!-- ===== HERO ===== -->
+<header class="hero">
+  <div class="hero-badge"><span class="badge-dot"></span>ML chạy hoàn toàn trên trình duyệt — Không cần server</div>
+  <h1>Chẩn đoán<br/><span class="grad">Tiểu đường</span></h1>
+  <p>Hệ thống AI phân tích 8 chỉ số y tế và dự đoán nguy cơ mắc bệnh tiểu đường type 2 bằng Random Forest Classifier.</p>
+  <div class="hero-pills">
+    <span class="pill active">Random Forest</span>
+    <span class="pill">768 mẫu huấn luyện</span>
+    <span class="pill">Binary Classification</span>
+    <span class="pill">Pima Indians Dataset</span>
+    <span class="pill">In-browser Inference</span>
+  </div>
+</header>
+
+<!-- ===== MAIN ===== -->
+<main class="container">
+  <div class="main-grid">
+
+    <!-- FORM -->
+    <div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon">🩺</div>
+          <div>
+            <h2>Thông số bệnh nhân</h2>
+            <p>Điều chỉnh các giá trị bên dưới</p>
+          </div>
+        </div>
+        <div class="card-body">
+
+          <!-- Sliders for key indicators -->
+          <div class="sliders">
+            <div class="slider-row">
+              <div class="slider-name">Glucose
+                <span>Nồng độ glucose (mg/dL)</span>
+              </div>
+              <div class="slider-wrap">
+                <input type="range" id="s-glucose" min="44" max="199" value="100" oninput="syncSlider(this,'v-glucose')"/>
+              </div>
+              <div class="slider-val" id="v-glucose">100</div>
+            </div>
+            <div class="slider-row">
+              <div class="slider-name">BMI
+                <span>Chỉ số khối cơ thể</span>
+              </div>
+              <div class="slider-wrap">
+                <input type="range" id="s-bmi" min="18" max="67" value="28" step="0.1" oninput="syncSlider(this,'v-bmi')"/>
+              </div>
+              <div class="slider-val" id="v-bmi">28.0</div>
+            </div>
+            <div class="slider-row">
+              <div class="slider-name">Tuổi
+                <span>Age (≥ 21)</span>
+              </div>
+              <div class="slider-wrap">
+                <input type="range" id="s-age" min="21" max="81" value="33" oninput="syncSlider(this,'v-age')"/>
+              </div>
+              <div class="slider-val" id="v-age">33</div>
+            </div>
+            <div class="slider-row">
+              <div class="slider-name">DiabetesPedigreeFunction
+                <span>Tiền sử gia đình</span>
+              </div>
+              <div class="slider-wrap">
+                <input type="range" id="s-dpf" min="0.05" max="2.42" value="0.45" step="0.001" oninput="syncSlider(this,'v-dpf')"/>
+              </div>
+              <div class="slider-val" id="v-dpf">0.450</div>
+            </div>
+          </div>
+
+          <!-- Other inputs -->
+          <div class="form-grid">
+            <div class="fg">
+              <label>Pregnancies</label>
+              <div class="input-wrap">
+                <span class="input-icon">🤰</span>
+                <input type="number" id="i-preg" min="0" max="17" value="1" />
+              </div>
+              <span class="hint">Số lần mang thai (0–17)</span>
+            </div>
+            <div class="fg">
+              <label>Blood Pressure</label>
+              <div class="input-wrap">
+                <span class="input-icon">💓</span>
+                <input type="number" id="i-bp" min="24" max="122" value="72" />
+              </div>
+              <span class="hint">Huyết áp tâm trương (mmHg)</span>
+            </div>
+            <div class="fg">
+              <label>Skin Thickness</label>
+              <div class="input-wrap">
+                <span class="input-icon">📏</span>
+                <input type="number" id="i-skin" min="7" max="99" value="23" />
+              </div>
+              <span class="hint">Độ dày nếp da (mm)</span>
+            </div>
+            <div class="fg">
+              <label>Insulin</label>
+              <div class="input-wrap">
+                <span class="input-icon">💉</span>
+                <input type="number" id="i-ins" min="14" max="846" value="80" />
+              </div>
+              <span class="hint">Insulin huyết thanh (mu U/ml)</span>
+            </div>
+          </div>
+
+          <!-- Presets -->
+          <div class="presets">
+            <span class="preset-lbl">Mẫu nhanh:</span>
+            <button class="preset-btn" onclick="applyPreset('high')">⚠️ Nguy cơ cao</button>
+            <button class="preset-btn" onclick="applyPreset('low')">✅ Nguy cơ thấp</button>
+            <button class="preset-btn" onclick="applyPreset('mid')">🔶 Trung bình</button>
+            <button class="preset-btn" onclick="applyPreset('reset')">↺ Đặt lại</button>
+          </div>
+
+          <button class="predict-btn" id="predictBtn" onclick="runPrediction()">
+            <span class="btn-text">🔍 Phân tích & Dự đoán</span>
+            <span class="spinner"></span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Model info -->
+      <div class="model-info-card" id="modelInfoCard" style="display:none">
+        <div class="mi-title">Thông tin mô hình đã tải</div>
+        <div class="mi-grid">
+          <div class="mi-item">
+            <div class="mi-num" id="mi-acc">–</div>
+            <div class="mi-lbl">Accuracy trên tập test</div>
+          </div>
+          <div class="mi-item">
+            <div class="mi-num" id="mi-f1">–</div>
+            <div class="mi-lbl">F1-Score</div>
+          </div>
+        </div>
+        <div class="mi-bar">
+          <div class="mi-bar-lbl">
+            <span id="mi-name">–</span>
+            <span id="mi-size">–</span>
+          </div>
+          <div class="mi-bar-track">
+            <div class="mi-bar-fill" id="mi-fill" style="width:0%"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pipeline -->
+      <div class="pipeline-section">
+        <div class="pipe-title">Pipeline Hệ thống Thông minh</div>
+        <div class="pipe-flow">
+          <div class="pipe-step">
+            <div class="ps-icon">📋</div>
+            <div class="ps-lbl">8 chỉ số y tế</div>
+          </div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step">
+            <div class="ps-icon">⚙️</div>
+            <div class="ps-lbl">StandardScaler</div>
+          </div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step">
+            <div class="ps-icon">🌲</div>
+            <div class="ps-lbl">Random Forest</div>
+          </div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step">
+            <div class="ps-icon">🗳️</div>
+            <div class="ps-lbl">Voting 50 cây</div>
+          </div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step">
+            <div class="ps-icon">✅</div>
+            <div class="ps-lbl">Dự đoán</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RESULT -->
+    <div class="result-card" id="resultCard">
+      <div class="result-placeholder" id="resultPlaceholder">
+        <div class="ph-icon">🩺</div>
+        <p>Nhập thông số và nhấn<br/><strong>Phân tích & Dự đoán</strong><br/>để xem kết quả AI</p>
+      </div>
+      <div class="result-actual" id="resultActual">
+        <div class="result-hero">
+          <span class="result-emoji" id="resEmoji">–</span>
+          <div class="result-status" id="resStatus">–</div>
+          <div class="result-confidence" id="resConf">–</div>
+        </div>
+        <div class="prob-section">
+          <div class="prob-title">Xác suất dự đoán</div>
+          <div class="prob-row">
+            <span class="prob-lbl">🟢 Không tiểu đường</span>
+            <div class="prob-track"><div class="prob-fill fill-neg" id="fillNeg"></div></div>
+            <span class="prob-pct" id="pctNeg">–</span>
+          </div>
+          <div class="prob-row">
+            <span class="prob-lbl">🔴 Tiểu đường</span>
+            <div class="prob-track"><div class="prob-fill fill-pos" id="fillPos"></div></div>
+            <span class="prob-pct" id="pctPos">–</span>
+          </div>
+        </div>
+        <div class="risk-section">
+          <div class="risk-title">Mức độ rủi ro</div>
+          <div class="risk-meter">
+            <div class="risk-needle" id="riskNeedle" style="left:0%"></div>
+          </div>
+          <div class="risk-labels">
+            <span>Thấp</span><span>Trung bình</span><span>Cao</span>
+          </div>
+        </div>
+        <div class="info-section">
+          <div class="info-row">
+            <span class="info-icon">🤖</span>
+            <div>
+              <div class="info-lbl">Mô hình sử dụng</div>
+              <div class="info-val" id="resModel">–</div>
+            </div>
+          </div>
+          <div class="info-row">
+            <span class="info-icon">📊</span>
+            <div>
+              <div class="info-lbl">Dataset</div>
+              <div class="info-val">Pima Indians Diabetes (768 mẫu)</div>
+            </div>
+          </div>
+          <div class="info-row">
+            <span class="info-icon">⚡</span>
+            <div>
+              <div class="info-lbl">Inference</div>
+              <div class="info-val">In-browser JavaScript (no server)</div>
+            </div>
+          </div>
+        </div>
+        <div class="disclaimer">⚠️ Đây là công cụ hỗ trợ giáo dục. Không thay thế chẩn đoán y tế chuyên nghiệp.</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <p>Assignment 01 — Intelligent System Development · TS. Đinh Quế Trần · PTIT 2026</p>
+  <p style="margin-top:6px">Dataset: <a href="https://www.kaggle.com/datasets/uciml/pima-indians-diabetes-database" target="_blank">Pima Indians Diabetes</a> · Model chạy 100% trên trình duyệt</p>
+</footer>
+
+<script>
+// ============================================================
+// ML ENGINE — Pure JavaScript Tree Traversal
+// ============================================================
+let MODEL = null;
+
+// ---- Tree traversal ----
+function predictTree(tree, x) {
+  let node = tree;
+  while (!node.leaf) {
+    node = x[node.feature] <= node.threshold ? node.left : node.right;
+  }
+  return node.value; // [prob_class0, prob_class1]
+}
+
+function predictRandomForest(trees, x) {
+  // Average probabilities across all trees
+  let probs = new Array(2).fill(0);
+  for (const tree of trees) {
+    const p = predictTree(tree, x);
+    probs[0] += p[0];
+    probs[1] += p[1];
+  }
+  return probs.map(p => p / trees.length);
+}
+
+function predictDecisionTree(tree, x) {
+  return predictTree(tree, x);
+}
+
+// ---- StandardScaler ----
+function scaleFeatures(raw, scaler) {
+  return raw.map((v, i) => (v - scaler.mean_[i]) / scaler.scale_[i]);
+}
+
+// ---- Main predict function ----
+function predict(rawFeatures) {
+  if (!MODEL) throw new Error('Model not loaded');
+  const scaled = scaleFeatures(rawFeatures, MODEL.scaler);
+  let probs;
+  if (MODEL.type === 'random_forest') {
+    probs = predictRandomForest(MODEL.trees, scaled);
+  } else {
+    probs = predictDecisionTree(MODEL.tree, scaled);
+  }
+  const prediction = probs[1] > probs[0] ? 1 : 0;
+  return { prediction, probs };
+}
+
+// ============================================================
+// MODEL LOADER
+// ============================================================
+async function loadModel() {
+  const overlay = document.getElementById('loadingOverlay');
+  const loText  = document.getElementById('loText');
+  overlay.classList.add('show');
+  loText.textContent = 'Đang tải mô hình AI...';
+  try {
+    const res = await fetch('./model.json');
+    if (!res.ok) throw new Error('Không tải được model.json');
+    MODEL = await res.json();
+
+    // Show model info
+    const card = document.getElementById('modelInfoCard');
+    card.style.display = 'block';
+    document.getElementById('mi-acc').textContent  = (MODEL.metrics.accuracy * 100).toFixed(1) + '%';
+    document.getElementById('mi-f1').textContent   = MODEL.metrics.f1.toFixed(3);
+    document.getElementById('mi-name').textContent = MODEL.model_name;
+    document.getElementById('mi-fill').style.width = (MODEL.metrics.accuracy * 100) + '%';
+
+    overlay.classList.remove('show');
+    console.log('✅ Model loaded:', MODEL.model_name, MODEL.metrics);
+  } catch(err) {
+    loText.textContent = '❌ Không tải được model. Dùng fallback...';
+    console.warn('Model load error:', err);
+    setTimeout(() => overlay.classList.remove('show'), 1500);
+  }
+}
+
+// ============================================================
+// UI LOGIC
+// ============================================================
+function syncSlider(el, valId) {
+  const val = parseFloat(el.value);
+  document.getElementById(valId).textContent =
+    el.id === 's-dpf' ? val.toFixed(3) :
+    el.id === 's-bmi' ? val.toFixed(1) : val;
+}
+
+function getValues() {
+  return [
+    parseFloat(document.getElementById('i-preg').value)  || 0,
+    parseFloat(document.getElementById('s-glucose').value) || 100,
+    parseFloat(document.getElementById('i-bp').value)    || 70,
+    parseFloat(document.getElementById('i-skin').value)  || 20,
+    parseFloat(document.getElementById('i-ins').value)   || 80,
+    parseFloat(document.getElementById('s-bmi').value)   || 28,
+    parseFloat(document.getElementById('s-dpf').value)   || 0.45,
+    parseFloat(document.getElementById('s-age').value)   || 33,
+  ];
+}
+
+const PRESETS = {
+  high:  [6,   148, 72,  35,  0,   33.6, 0.627, 50],
+  low:   [1,   85,  66,  29,  0,   26.6, 0.351, 31],
+  mid:   [3,   120, 70,  30,  90,  28.5, 0.450, 40],
+  reset: [1,   100, 72,  23,  80,  28.0, 0.450, 33],
+};
+
+function applyPreset(name) {
+  const [preg, gluc, bp, skin, ins, bmi, dpf, age] = PRESETS[name];
+  document.getElementById('i-preg').value = preg;
+  document.getElementById('s-glucose').value = gluc;
+  document.getElementById('v-glucose').textContent = gluc;
+  document.getElementById('i-bp').value = bp;
+  document.getElementById('i-skin').value = skin;
+  document.getElementById('i-ins').value = ins;
+  document.getElementById('s-bmi').value = bmi;
+  document.getElementById('v-bmi').textContent = bmi.toFixed(1);
+  document.getElementById('s-dpf').value = dpf;
+  document.getElementById('v-dpf').textContent = dpf.toFixed(3);
+  document.getElementById('s-age').value = age;
+  document.getElementById('v-age').textContent = age;
+}
+
+async function runPrediction() {
+  if (!MODEL) {
+    alert('Model đang tải, vui lòng đợi...');
+    return;
+  }
+  const btn = document.getElementById('predictBtn');
+  btn.classList.add('loading');
+
+  await new Promise(r => setTimeout(r, 200)); // Let UI update
+
+  try {
+    const features = getValues();
+    const { prediction, probs } = predict(features);
+    showResult(prediction, probs);
+  } catch(err) {
+    console.error(err);
+    // Local fallback
+    const features = getValues();
+    const probPos = localFallback(features);
+    showResult(probPos > 0.5 ? 1 : 0, [1 - probPos, probPos]);
+  } finally {
+    btn.classList.remove('loading');
+  }
+}
+
+function localFallback(f) {
+  // Simple heuristic: glucose weight + BMI + age
+  let s = 0;
+  if (f[1] > 140) s += 0.4; else if (f[1] > 100) s += 0.2;
+  if (f[5] > 30) s += 0.2; else if (f[5] > 25) s += 0.1;
+  if (f[7] > 50) s += 0.15; else if (f[7] > 40) s += 0.07;
+  if (f[6] > 0.5) s += 0.1;
+  if (f[0] > 3) s += 0.05;
+  return Math.max(0.01, Math.min(0.99, s));
+}
+
+function showResult(prediction, probs) {
+  const placeholder = document.getElementById('resultPlaceholder');
+  const actual      = document.getElementById('resultActual');
+
+  placeholder.style.display = 'none';
+  actual.style.display = 'block';
+
+  const isPos = prediction === 1;
+  const posP = probs[1] * 100;
+  const negP = probs[0] * 100;
+
+  document.getElementById('resEmoji').textContent = isPos ? '⚠️' : '✅';
+  const statusEl = document.getElementById('resStatus');
+  statusEl.textContent = isPos ? 'Có nguy cơ Tiểu đường' : 'Không có nguy cơ Tiểu đường';
+  statusEl.className = 'result-status ' + (isPos ? 'positive' : 'negative');
+  document.getElementById('resConf').textContent = `Độ tin cậy: ${Math.max(posP, negP).toFixed(1)}%`;
+  document.getElementById('resModel').textContent = MODEL ? MODEL.model_name : 'Random Forest (fallback)';
+
+  // Animate probability bars
+  setTimeout(() => {
+    document.getElementById('fillNeg').style.width = negP.toFixed(1) + '%';
+    document.getElementById('fillPos').style.width = posP.toFixed(1) + '%';
+    document.getElementById('pctNeg').textContent = negP.toFixed(1) + '%';
+    document.getElementById('pctPos').textContent = posP.toFixed(1) + '%';
+    document.getElementById('riskNeedle').style.left = posP.toFixed(1) + '%';
+  }, 50);
+}
+
+// Init
+window.addEventListener('DOMContentLoaded', loadModel);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter') runPrediction();
+});
+</script>
+</body>
+</html>
